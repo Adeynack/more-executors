@@ -70,7 +70,7 @@ public class SequencedExecutorTest {
   @Test
   public void twoTasksAreNotExecutedAtTheSameTime() throws Exception {
     IntStream.range(0, 12)
-             .forEach(i -> CompletableFuture.runAsync(createTask(i, false), sequencedExecutor));
+             .forEach(i -> sequencedExecutor.execute(createTask(i, false)));
     startedTaskWait.get(1, TimeUnit.MINUTES);
     Assert.assertEquals("No lock should be refused.", 0, refusedLocks.get());
   }
@@ -78,7 +78,7 @@ public class SequencedExecutorTest {
   @Test
   public void twoTasksAreNotExecutedAtTheSameTimeWhenSubmittedFromAnExecutedTask() throws Exception {
     IntStream.range(0, 12)
-             .forEach(i -> CompletableFuture.runAsync(createTask(i, true), sequencedExecutor));
+             .forEach(i -> sequencedExecutor.execute(createTask(i, true)));
     startedTaskWait.get(1, TimeUnit.MINUTES);
     Assert.assertEquals("No lock should be refused.", 0, refusedLocks.get());
   }

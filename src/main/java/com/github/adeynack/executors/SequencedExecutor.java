@@ -2,7 +2,7 @@ package com.github.adeynack.executors;
 
 import org.jetbrains.annotations.NotNull;
 
-import java.util.LinkedList;
+import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.locks.ReentrantLock;
@@ -11,7 +11,7 @@ public class SequencedExecutor implements Executor {
 
   private final Executor baseExecutor;
   private final ReentrantLock mainLock = new ReentrantLock();
-  private final Queue<Runnable> taskQueue = new LinkedList<>();
+  private final Queue<Runnable> taskQueue = new ArrayDeque<>();
 
   /**
    * indicates if a task already was submitted to the underlying {@link Executor}.
