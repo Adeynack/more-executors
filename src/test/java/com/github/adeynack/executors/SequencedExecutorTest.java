@@ -98,14 +98,15 @@ public class SequencedExecutorTest {
 
   @Test
   public void aFailingTaskDoesNotCrashTheExecutor() throws Exception {
-    final CompletableFuture[] futures =
+    final List<CompletableFuture<Void>> futures =
         IntStream.range(0, 12)
                  .mapToObj(i -> CompletableFuture.runAsync(createTask(i, false, i == 5), sequencedExecutor))
-                 .toArray(CompletableFuture[]::new);
+                 .collect(Collectors.toList());
 
     // Expecting the execution to fail.
     try {
-      CompletableFuture.allOf(futures).get(1, TimeUnit.MINUTES);
+      CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[futures.size()]))
+                       .get(1, TimeUnit.MINUTES);
       fail("Expecting one of the future to throw an exception");
     } catch (ExecutionException executionException) {
       final Throwable cause = executionException.getCause();
@@ -116,19 +117,19 @@ public class SequencedExecutorTest {
     assertEquals("No lock should be refused.", 0, refusedLocks.get());
 
     // future at index 5 should have failed.
-    assertTrue(futures[5].isCompletedExceptionally());
+    assertTrue(futures.get(5).isCompletedExceptionally());
     // all others should have not
-    assertFalse(futures[0].isCompletedExceptionally());
-    assertFalse(futures[1].isCompletedExceptionally());
-    assertFalse(futures[2].isCompletedExceptionally());
-    assertFalse(futures[3].isCompletedExceptionally());
-    assertFalse(futures[4].isCompletedExceptionally());
-    assertFalse(futures[6].isCompletedExceptionally());
-    assertFalse(futures[7].isCompletedExceptionally());
-    assertFalse(futures[8].isCompletedExceptionally());
-    assertFalse(futures[9].isCompletedExceptionally());
-    assertFalse(futures[10].isCompletedExceptionally());
-    assertFalse(futures[11].isCompletedExceptionally());
+    assertFalse(futures.get(0).isCompletedExceptionally());
+    assertFalse(futures.get(1).isCompletedExceptionally());
+    assertFalse(futures.get(2).isCompletedExceptionally());
+    assertFalse(futures.get(3).isCompletedExceptionally());
+    assertFalse(futures.get(4).isCompletedExceptionally());
+    assertFalse(futures.get(6).isCompletedExceptionally());
+    assertFalse(futures.get(7).isCompletedExceptionally());
+    assertFalse(futures.get(8).isCompletedExceptionally());
+    assertFalse(futures.get(9).isCompletedExceptionally());
+    assertFalse(futures.get(10).isCompletedExceptionally());
+    assertFalse(futures.get(11).isCompletedExceptionally());
   }
 
   @Test
@@ -141,7 +142,8 @@ public class SequencedExecutorTest {
                  }, sequencedExecutor))
                  .collect(Collectors.toList());
 
-    CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).get(1, TimeUnit.MINUTES);
+    CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[futures.size()]))
+                     .get(1, TimeUnit.MINUTES);
 
     assertEquals("No lock should be refused.", 0, refusedLocks.get());
 

@@ -32,6 +32,10 @@ dependencies {
     testCompile "junit:junit:4.12"
 }
 
+tasks.withType(JavaCompile) {
+    options.compilerArgs << "-Xlint:all" << "-Xlint:-processing" << "-Xlint:-serial" << "-Werror"
+}
+
 compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
