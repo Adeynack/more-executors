@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class SequencedExecutorTest {
 
@@ -105,6 +106,7 @@ public class SequencedExecutorTest {
     // Expecting the execution to fail.
     try {
       CompletableFuture.allOf(futures).get(1, TimeUnit.MINUTES);
+      fail("Expecting one of the future to throw an exception");
     } catch (ExecutionException executionException) {
       final Throwable cause = executionException.getCause();
       assertThat(cause, instanceOf(RuntimeException.class));
