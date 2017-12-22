@@ -2,20 +2,26 @@ package com.github.adeynack.executors;
 
 import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.concurrent.GuardedBy;
 import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.locks.ReentrantLock;
 
+@SuppressWarnings("WeakerAccess") // Library class
 public class SequencedExecutor implements Executor {
 
-  private final Executor baseExecutor;
   private final ReentrantLock mainLock = new ReentrantLock();
+
+  private final Executor baseExecutor;
+
+  @GuardedBy("mainLock")
   private final Queue<Runnable> taskQueue = new ArrayDeque<>();
 
   /**
    * indicates if a task already was submitted to the underlying {@link Executor}.
    */
+  @GuardedBy("mainLock")
   private volatile Boolean taskSubmitted = false;
 
   public SequencedExecutor(Executor baseExecutor) {

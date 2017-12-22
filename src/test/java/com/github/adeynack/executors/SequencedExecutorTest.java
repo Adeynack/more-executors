@@ -24,7 +24,7 @@ import static org.junit.Assert.fail;
 
 public class SequencedExecutorTest {
 
-  private Executor sequencedExecutor;
+  private SequencedExecutor sequencedExecutor;
   private AtomicInteger refusedLocks;
   private Lock testLock;
   private AtomicInteger createdTaskCounter;
