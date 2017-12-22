@@ -1,0 +1,7 @@
+language: java
+
+sudo: false
+
+jdk:
+    # Java 8 is required in order to use the `kotlin` Gradle plugin.
+    - openjdk8
