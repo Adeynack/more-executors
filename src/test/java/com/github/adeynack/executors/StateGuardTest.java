@@ -121,7 +121,7 @@ public class StateGuardTest {
   @Test
   public void methodChangePerformsOperationsOnTheSequencedExecutor() throws Exception {
 
-    final CompletableFuture[] futures =
+    final CompletableFuture<?>[] futures =
         IntStream.range(0, 12)
                  .mapToObj(i -> service.addNewUser(String.format("New User %s", i)).toCompletableFuture())
                  .toArray(CompletableFuture[]::new);
@@ -172,7 +172,7 @@ public class StateGuardTest {
                  .mapToObj(i -> service.incrementAndGet(i < 6 ? "Klipitar" : "Borey Papatwika").toCompletableFuture())
                  .collect(Collectors.toList());
 
-    CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get(1, TimeUnit.MINUTES);
+    CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).get(1, TimeUnit.MINUTES);
 
     sequentialChecker.assertMaxParallelTaskCount(1);
 
