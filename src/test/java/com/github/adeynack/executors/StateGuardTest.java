@@ -20,10 +20,13 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.startsWith;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 public class StateGuardTest {
 
@@ -76,6 +79,9 @@ public class StateGuardTest {
               st -> {
                 try {
                   Thread.sleep(100);
+                  if (callSequentialNumber < 0) {
+                    throw new IllegalStateException("You asked for it.");
+                  }
                 } catch (InterruptedException e) {
                   throw new RuntimeException(e);
                 }
@@ -89,9 +95,13 @@ public class StateGuardTest {
           String.format("incrementAndGet %s", username),
           true,
           () -> {
-            int actualValue = st.usersCounters.get(username);
+            final Map<String, Integer> usersCounters = st.usersCounters;
+            if (!usersCounters.containsKey(username)) {
+              throw new NullPointerException(String.format("User \"%s\" is not listed.", username));
+            }
+            int actualValue = usersCounters.get(username);
             int updatedValue = actualValue + 1;
-            final Map<String, Integer> updatedUserCounters = new HashMap<>(st.usersCounters);
+            final Map<String, Integer> updatedUserCounters = new HashMap<>(usersCounters);
             updatedUserCounters.put(username, updatedValue);
             try {
               Thread.sleep(100);
@@ -137,6 +147,19 @@ public class StateGuardTest {
   }
 
   @Test
+  public void methodChangeFailsGracefully() throws Exception {
+    final CompletableFuture<Void> future = service.addNewUser("Klipitar").toCompletableFuture();
+    try {
+      future.get();
+      fail("Expecting the future to throw an exception");
+    } catch (ExecutionException executionException) {
+      final Throwable cause = executionException.getCause();
+      assertThat(cause, instanceOf(IllegalStateException.class));
+      assertEquals("User is already listed.", cause.getMessage());
+    }
+  }
+
+  @Test
   public void methodImmediateGetPerformsOperationsOnTheSameThreadAsTheCaller() {
 
     final List<Set<String>> values =
@@ -162,6 +185,17 @@ public class StateGuardTest {
         values.get(0),
         equalTo(expectedNames)));
 
+  }
+
+  @Test
+  public void methodImmediateGetThrowsExceptionOnError() throws Exception {
+    try {
+      service.getUserNames(-1);
+      fail("Expecting operation to throw an exception");
+    } catch (Exception e) {
+      assertThat(e, instanceOf(IllegalStateException.class));
+      assertEquals("You asked for it.", e.getMessage());
+    }
   }
 
   @Test
@@ -212,6 +246,19 @@ public class StateGuardTest {
                  })
                  .collect(Collectors.toList());
     assertThat(valuesForPapatwika, containsInAnyOrder(43, 44, 45, 46, 47, 48));
+  }
+
+  @Test
+  public void methodReadAndChangeFailsGracefully() throws Exception {
+    final CompletableFuture<Integer> future = service.incrementAndGet("I do not exist").toCompletableFuture();
+    try {
+      future.get();
+      fail("Expecting the future to throw an exception");
+    } catch (ExecutionException executionException) {
+      final Throwable cause = executionException.getCause();
+      assertThat(cause, instanceOf(NullPointerException.class));
+      assertEquals("User \"I do not exist\" is not listed.", cause.getMessage());
+    }
   }
 
 }
