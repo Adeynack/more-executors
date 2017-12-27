@@ -1,5 +1,7 @@
 package com.github.adeynack.executors;
 
+import com.github.adeynack.executors.testTools.SequentialChecker;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -10,12 +12,11 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
@@ -25,50 +26,39 @@ import static org.junit.Assert.fail;
 public class SequencedExecutorTest {
 
   private SequencedExecutor sequencedExecutor;
-  private AtomicInteger refusedLocks;
-  private Lock testLock;
+  private SequentialChecker sequentialChecker;
   private AtomicInteger createdTaskCounter;
   private CompletableFuture<Integer> startedTaskWait;
 
   @Before
   public void before() {
-    final Executor baseExecutor = Executors.newFixedThreadPool(4);
+    final Executor baseExecutor = Executors.newFixedThreadPool(
+        4,
+        new ThreadFactoryBuilder().setNameFormat("sequenced-executor-test-pool-%d").build());
     sequencedExecutor = new SequencedExecutor(baseExecutor);
-    refusedLocks = new AtomicInteger();
-    testLock = new ReentrantLock();
+    sequentialChecker = new SequentialChecker();
     createdTaskCounter = new AtomicInteger();
     startedTaskWait = new CompletableFuture<>();
   }
 
-  private Runnable createTask(final int taskId, final boolean rePost, final boolean fail) {
+  private Runnable createTask(final Integer taskId, final boolean rePost, final boolean fail) {
     int nt = createdTaskCounter.incrementAndGet();
     System.out.println(String.format("+ There are now %s tasks created.", nt));
     return () -> {
       try {
-        System.out.println(String.format("[%s] Waiting on testLock", taskId));
-        final boolean gotLock = testLock.tryLock();
-        try {
-          if (!gotLock) {
-            System.out.println(String.format("[%s] ERROR: Could not obtain lock", taskId));
-            refusedLocks.incrementAndGet();
-          } else {
-            System.out.println(String.format("[%s] Lock obtained.", taskId));
-            if (rePost) {
-              sequencedExecutor.execute(createTask(taskId + 100, false, false));
-            }
-            if (fail) {
-              throw new RuntimeException(String.format("Task %s fails", taskId));
-            }
+        sequentialChecker.check(taskId.toString(), true, () -> {
+          if (rePost) {
+            sequencedExecutor.execute(createTask(taskId + 100, false, false));
+          }
+          if (fail) {
+            throw new RuntimeException(String.format("Task %s fails", taskId));
+          }
+          try {
             Thread.sleep(100);
+          } catch (InterruptedException e) {
+            throw new RuntimeException(e);
           }
-        } finally {
-          if (gotLock) {
-            System.out.println(String.format("[%s] Unlocking testLock", taskId));
-            testLock.unlock();
-          }
-        }
-      } catch (InterruptedException e) {
-        System.err.println(String.format("[%s] %s", taskId, e));
+        });
       } finally {
         System.out.println(String.format("[%s] End of runnable.", taskId));
         int t = createdTaskCounter.decrementAndGet();
@@ -80,12 +70,19 @@ public class SequencedExecutorTest {
     };
   }
 
+  private void assertAllTasksExecutedOnSequencedExecutor() {
+    sequentialChecker.getLog().forEach((entry) -> {
+      assertThat(entry.threadName, startsWith("sequenced-executor-test-pool-"));
+    });
+  }
+
   @Test
   public void twoTasksAreNotExecutedAtTheSameTime() throws Exception {
     IntStream.range(0, 12)
              .forEach(i -> sequencedExecutor.execute(createTask(i, false, false)));
     startedTaskWait.get(1, TimeUnit.MINUTES);
-    assertEquals("No lock should be refused.", 0, refusedLocks.get());
+    sequentialChecker.assertMaxParallelTaskCount(1);
+    assertAllTasksExecutedOnSequencedExecutor();
   }
 
   @Test
@@ -93,7 +90,8 @@ public class SequencedExecutorTest {
     IntStream.range(0, 12)
              .forEach(i -> sequencedExecutor.execute(createTask(i, true, false)));
     startedTaskWait.get(1, TimeUnit.MINUTES);
-    assertEquals("No lock should be refused.", 0, refusedLocks.get());
+    sequentialChecker.assertMaxParallelTaskCount(1);
+    assertAllTasksExecutedOnSequencedExecutor();
   }
 
   @Test
@@ -114,7 +112,7 @@ public class SequencedExecutorTest {
       assertEquals("Task 5 fails", cause.getMessage());
     }
 
-    assertEquals("No lock should be refused.", 0, refusedLocks.get());
+    sequentialChecker.assertMaxParallelTaskCount(1);
 
     // future at index 5 should have failed.
     assertTrue(futures.get(5).isCompletedExceptionally());
@@ -130,6 +128,8 @@ public class SequencedExecutorTest {
     assertFalse(futures.get(9).isCompletedExceptionally());
     assertFalse(futures.get(10).isCompletedExceptionally());
     assertFalse(futures.get(11).isCompletedExceptionally());
+
+    assertAllTasksExecutedOnSequencedExecutor();
   }
 
   @Test
@@ -145,7 +145,7 @@ public class SequencedExecutorTest {
     CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[futures.size()]))
                      .get(1, TimeUnit.MINUTES);
 
-    assertEquals("No lock should be refused.", 0, refusedLocks.get());
+    sequentialChecker.assertMaxParallelTaskCount(1);
 
     assertEquals(0, futures.get(0).get().intValue());
     assertEquals(1, futures.get(1).get().intValue());
@@ -159,6 +159,8 @@ public class SequencedExecutorTest {
     assertEquals(9, futures.get(9).get().intValue());
     assertEquals(10, futures.get(10).get().intValue());
     assertEquals(11, futures.get(11).get().intValue());
+
+    assertAllTasksExecutedOnSequencedExecutor();
   }
 
 }
