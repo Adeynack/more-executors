@@ -1,7 +1,6 @@
 package com.github.adeynack.executors.testTools;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -9,7 +8,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
 
@@ -54,26 +52,6 @@ public class SequentialChecker {
     }
   }
 
-  //  public <T> T check(String taskId, Supplier<T> r) {
-//    System.out.println(String.format("[%s] Waiting on testLock", taskId));
-//    final boolean gotLock = testLock.tryLock();
-//    try {
-//      if (!gotLock) {
-//        System.out.println(String.format("[%s] ERROR: Could not obtain lock", taskId));
-//        refusedLocks.incrementAndGet();
-//        return null;
-//      } else {
-//        System.out.println(String.format("[%s] Lock obtained.", taskId));
-//        return r.get();
-//      }
-//    } finally {
-//      if (gotLock) {
-//        System.out.println(String.format("[%s] Unlocking testLock", taskId));
-//        testLock.unlock();
-//      }
-//    }
-//  }
-
   public void assertMaxParallelTaskCount(final int expected) {
     final int maxParallelTasks = getLog().stream().mapToInt(entry -> entry.parallelTasks).max().orElse(0);
     assertEquals(
@@ -82,6 +60,7 @@ public class SequentialChecker {
         maxParallelTasks);
   }
 
+  @SuppressWarnings("WeakerAccess")
   public static class TaskLogEntry {
     public final String threadName;
     public final String taskId;
