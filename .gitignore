@@ -23,3 +23,6 @@ hs_err_pid*
 .gradle
 .idea
 build
+
+# Ensure Gradle Wrapper presence (*.jar is ignored)
+!gradle/wrapper/gradle-wrapper.jar
