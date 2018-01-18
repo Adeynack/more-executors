@@ -30,7 +30,7 @@ public class StateGuard<S> {
    *
    * @param stateMutation a function receiving the actual state and returning the
    *                      new, mutated, state.
-   * @return a {@link CompletionStage<Void>} indicating when the change is completed.
+   * @return a {@link CompletionStage} indicating when the change is completed.
    */
   public CompletionStage<Void> change(Function<S, S> stateMutation) {
     return CompletableFuture.runAsync(
@@ -71,7 +71,8 @@ public class StateGuard<S> {
    *                      with both the new state and the value to return to the caller. If it
    *                      returns `null`, then the state stays the same and `null` is returned
    *                      to the caller.
-   * @return a {@link CompletionStage<T>} providing, when ready, the read value.
+   * @param <T>           the type of the value to be returned.
+   * @return a {@link CompletionStage} providing, when ready, the read value.
    */
   public <T> CompletionStage<T> readAndChange(Function<S, StateDecision<S, T>> stateMutation) {
     return CompletableFuture.supplyAsync(
