@@ -23,6 +23,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("Duplicates") // tolerated for test code
 public class SequencedExecutorTest {
 
   private SequencedExecutor sequencedExecutor;

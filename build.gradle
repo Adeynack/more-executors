@@ -44,9 +44,13 @@ compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
-test {
+tasks.withType(Test) {
     testLogging {
-        // Other events: "STARTED"
-        events "PASSED", "FAILED", "SKIPPED"
+        exceptionFormat = 'full'
+    }
+    afterTest { desc, result ->
+        String rt = result.resultType.toString()
+        String successIcon = rt == "SUCCESS" ? "🔹" : rt == "FAILURE" ? "❌" : "🔸️"
+        logger.quiet "ⓣ  ${successIcon}  ${desc.className}#`${desc.name}` : ${rt}"
     }
 }
