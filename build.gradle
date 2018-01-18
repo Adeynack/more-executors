@@ -1,6 +1,7 @@
 buildscript {
     ext {
         kotlin_version = '1.2.10' // DON'T FORGET TO CHANGE THE PLUGIN VERSION AS WELL
+        PUBLISH_VERSION = '0.1-SNAPSHOT'
     }
 
     repositories {
@@ -15,10 +16,11 @@ plugins {
     id 'java'
     id "org.jetbrains.kotlin.jvm" version "1.2.10"
     id "net.ltgt.errorprone" version "0.0.13"
+    id 'maven-publish'
 }
 
 group 'com.github.adeynack'
-version '1.0-SNAPSHOT'
+version "$PUBLISH_VERSION"
 
 sourceCompatibility = 1.8
 
@@ -48,5 +50,27 @@ test {
     testLogging {
         // Other events: "STARTED"
         events "PASSED", "FAILED", "SKIPPED"
+    }
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+publishing {
+    publications {
+        MavenPub(MavenPublication) {
+            from components.java
+            artifact sourcesJar
+            artifact javadocJar
+            groupId 'com.github.adeynack'
+            version "$PUBLISH_VERSION"
+        }
     }
 }
