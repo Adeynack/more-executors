@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -55,26 +56,28 @@ public class LimitedExecutorTest {
     int nt = createdTaskCounter.incrementAndGet();
     System.out.println(String.format("+ There are now %s tasks created.", nt));
     return () -> {
-      sequentialChecker.check(taskId.toString(), true, () -> {
-        if (rePost) {
-          limitedExecutor.execute(createTask(taskId + 100, false, false));
-        }
-        if (fail) {
-          throw new RuntimeException(String.format("Task %s fails", taskId));
-        }
-        try {
-          Thread.sleep(200);
-        } catch (InterruptedException e) {
-          throw new RuntimeException(e);
-        } finally {
-          System.out.println(String.format("[%s] End of runnable.", taskId));
-          int t = createdTaskCounter.decrementAndGet();
-          System.out.println(String.format("- There are now %s tasks created.", t));
-          if (t == 0) {
-            startedTaskWait.complete(0);
+      try {
+        sequentialChecker.check(taskId.toString(), true, () -> {
+          if (rePost) {
+            limitedExecutor.execute(createTask(taskId + 100, false, false));
           }
+          if (fail) {
+            throw new RuntimeException(String.format("Task %s fails", taskId));
+          }
+          try {
+            Thread.sleep(200);
+          } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+          }
+        });
+      } finally {
+        System.out.println(String.format("[%s] End of runnable.", taskId));
+        int t = createdTaskCounter.decrementAndGet();
+        System.out.println(String.format("- There are now %s tasks created.", t));
+        if (t == 0) {
+          startedTaskWait.complete(0);
         }
-      });
+      }
     };
   }
 
