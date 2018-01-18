@@ -5,9 +5,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -32,29 +30,26 @@ public class LimitedExecutorTest {
 
   private LimitedExecutor limitedExecutor;
   private SequentialChecker sequentialChecker;
+  private int expectedCreatedTaskCount;
   private AtomicInteger createdTaskCounter;
-  private CompletableFuture<Integer> startedTaskWait;
+  private AtomicInteger completedTaskCounter;
+  private CompletableFuture<Void> expectedTaskCountReached;
 
-  private final Field fieldTasksSubmitted = LimitedExecutor.class.getDeclaredField("tasksSubmitted");
-  private final Field fieldTaskQueue = LimitedExecutor.class.getDeclaredField("taskQueue");
-
-  public LimitedExecutorTest() throws NoSuchFieldException {
-  }
+  final Executor baseExecutor = Executors.newFixedThreadPool(
+      4,
+      new ThreadFactoryBuilder().setNameFormat("limited-executor-test-pool-%d").build());
 
   @Before
   public void before() {
-    final Executor baseExecutor = Executors.newFixedThreadPool(
-        4,
-        new ThreadFactoryBuilder().setNameFormat("limited-executor-test-pool-%d").build());
     limitedExecutor = new LimitedExecutor(baseExecutor, 3);
     sequentialChecker = new SequentialChecker();
     createdTaskCounter = new AtomicInteger();
-    startedTaskWait = new CompletableFuture<>();
+    completedTaskCounter = new AtomicInteger();
+    expectedTaskCountReached = new CompletableFuture<>();
   }
 
   private Runnable createTask(final Integer taskId, final boolean rePost, final boolean fail) {
-    int nt = createdTaskCounter.incrementAndGet();
-    System.out.println(String.format("+ There are now %s tasks created.", nt));
+    createdTaskCounter.incrementAndGet();
     return () -> {
       try {
         sequentialChecker.check(taskId.toString(), true, () -> {
@@ -71,11 +66,15 @@ public class LimitedExecutorTest {
           }
         });
       } finally {
-        System.out.println(String.format("[%s] End of runnable.", taskId));
-        int t = createdTaskCounter.decrementAndGet();
-        System.out.println(String.format("- There are now %s tasks created.", t));
-        if (t == 0) {
-          startedTaskWait.complete(0);
+        if (completedTaskCounter.incrementAndGet() == expectedCreatedTaskCount) {
+          baseExecutor.execute(() -> {
+            try {
+              Thread.sleep(200);
+              expectedTaskCountReached.complete(null);
+            } catch (InterruptedException e) {
+              throw new RuntimeException(e);
+            }
+          });
         }
       }
     };
@@ -89,9 +88,12 @@ public class LimitedExecutorTest {
 
   @Test
   public void notMoreThan3TasksAreExecutedAtTheSameTime() throws Exception {
+    expectedCreatedTaskCount = 24;
     IntStream.range(0, 24)
              .forEach(i -> limitedExecutor.execute(createTask(i, false, false)));
-    startedTaskWait.get(1, TimeUnit.MINUTES);
+    expectedTaskCountReached.get(1, TimeUnit.MINUTES);
+    assertThat(createdTaskCounter.get(), equalTo(expectedCreatedTaskCount));
+    assertThat(completedTaskCounter.get(), equalTo(expectedCreatedTaskCount));
     sequentialChecker.assertMaxParallelTaskCount(3);
     assertAllTasksExecutedOnLimitedExecutor();
     assertThat(limitedExecutor.getTasksSubmitted(), equalTo(0));
@@ -100,9 +102,12 @@ public class LimitedExecutorTest {
 
   @Test
   public void notMoreThan3TasksAreExecutedAtTheSameTimeWhenSubmittedFromAnExecutedTask() throws Exception {
+    expectedCreatedTaskCount = 24 * 2; // each task will re-post a new task.
     IntStream.range(0, 24)
              .forEach(i -> limitedExecutor.execute(createTask(i, true, false)));
-    startedTaskWait.get(1, TimeUnit.MINUTES);
+    expectedTaskCountReached.get(1, TimeUnit.MINUTES);
+    assertThat(createdTaskCounter.get(), equalTo(expectedCreatedTaskCount));
+    assertThat(completedTaskCounter.get(), equalTo(expectedCreatedTaskCount));
     sequentialChecker.assertMaxParallelTaskCount(3);
     assertAllTasksExecutedOnLimitedExecutor();
     assertThat(limitedExecutor.getTasksSubmitted(), equalTo(0));
@@ -111,6 +116,7 @@ public class LimitedExecutorTest {
 
   @Test
   public void aFailingTaskDoesNotCrashTheExecutor() throws Exception {
+    expectedCreatedTaskCount = 24;
     final List<CompletableFuture<Void>> futures =
         IntStream.range(0, 24)
                  .mapToObj(i -> CompletableFuture.runAsync(createTask(i, false, i == 5), limitedExecutor))
@@ -126,6 +132,11 @@ public class LimitedExecutorTest {
       assertThat(cause, instanceOf(RuntimeException.class));
       assertEquals("Task 5 fails", cause.getMessage());
     }
+
+    expectedTaskCountReached.get(1, TimeUnit.MINUTES);
+
+    assertThat(createdTaskCounter.get(), equalTo(expectedCreatedTaskCount));
+    assertThat(completedTaskCounter.get(), equalTo(expectedCreatedTaskCount));
 
     sequentialChecker.assertMaxParallelTaskCount(3);
 
@@ -143,6 +154,7 @@ public class LimitedExecutorTest {
 
   @Test
   public void whenUsedInAFutureItReturnsTheValue() throws Exception {
+    expectedCreatedTaskCount = 24;
     final List<CompletableFuture<Integer>> futures =
         IntStream.range(0, 24)
                  .mapToObj(i -> CompletableFuture.supplyAsync(() -> {
@@ -153,6 +165,11 @@ public class LimitedExecutorTest {
 
     CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[futures.size()]))
                      .get(1, TimeUnit.MINUTES);
+
+    expectedTaskCountReached.get(1, TimeUnit.MINUTES);
+    
+    assertThat(createdTaskCounter.get(), equalTo(expectedCreatedTaskCount));
+    assertThat(completedTaskCounter.get(), equalTo(expectedCreatedTaskCount));
 
     sequentialChecker.assertMaxParallelTaskCount(3);
 
